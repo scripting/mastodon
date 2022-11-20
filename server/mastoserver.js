@@ -6,15 +6,6 @@ const davehttp = require ("davehttp");
 const utils = require ("daveutils");
 
 var config = {
-	httpPort: process.env.PORT || 1401,
-	myDomain: "localhost",
-	twitterConsumerKey: undefined,
-	twitterConsumerSecret: undefined,
-	flForceTwitterLogin: false,
-	flLogToConsole: true,
-	flAllowAccessFromAnywhere: true, //1/2/18 by DW
-	flPostEnabled: false, //1/3/18 by DW
-	
 	clientKey: undefined, //11/16/22 by DW
 	clientSecret: undefined,
 	myAccessToken: undefined,
@@ -22,20 +13,12 @@ var config = {
 	urlRedirect: undefined,
 	urlRedirectForUser: "http://localhost:1401/blagooey", //the page we send the user back to once they're logged in
 	
-	httpRequestCallback: function (theRequest) {
-		return (false); //not consumed
-		},
-	http404Callback: function (theRequest) { //1/24/21 by DW
-		return (false); //not consumed
-		},
-	blockedAddresses: new Array (), //4/17/18 by DW
-	cacheFolder: "data/cache/", //3/11/21 by DW
-	flUseCache: true, //3/11/21 by DW
-	flServerEnabled: true,//5/2/21 by DW
-	flRemoveLineBreaksInOPML: true, //7/24/21 by DW
-	dataFolder: "data/", //7/24/21 by DW
-	userLogonCallback: function (options) { //8/14/22 by DW
-		}
+	httpPort: process.env.PORT || 1401,
+	myDomain: "localhost",
+	flLogToConsole: true,
+	flAllowAccessFromAnywhere: true, //1/2/18 by DW
+	flPostEnabled: false, //1/3/18 by DW
+	
 	};
 
 function readConfig (callback) {

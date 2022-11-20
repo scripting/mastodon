@@ -101,71 +101,7 @@ function buildParamList (paramtable, flPrivate) { //8/4/21 by DW
 		}
 	return (s);
 	}
-function servercall (path, params, flAuthenticated, callback, urlServer=appConsts.urlMastodonServer) {
-	var whenstart = new Date ();
-	if (params === undefined) {
-		params = new Object ();
-		}
-	if (flAuthenticated) { //1/11/21 by DW
-		params.oauth_token = localStorage.twOauthToken;
-		params.oauth_token_secret = localStorage.twOauthTokenSecret;
-		}
-	var url = urlServer + path + "?" + buildParamList (params, false);
-	httpRequest (url, undefined, undefined, function (err, jsontext) {
-		if (err) {
-			console.log ("servercall: url == " + url + ", err.message == " + err.message);
-			callback (err);
-			}
-		else {
-			callback (undefined, JSON.parse (jsontext));
-			}
-		});
-	}
-function serverpost (path, params, flAuthenticated, filedata, callback, urlServer=appConsts.urlMastodonServer) {
-	var whenstart = new Date ();
-	if (filedata !== undefined) {
-		if (!$.isPlainObject (filedata) && (typeof (filedata) != "string")) { //8/2/21 by DW
-			filedata = filedata.toString ();
-			}
-		}
-	if (params === undefined) {
-		params = new Object ();
-		}
-	if (flAuthenticated) { //1/11/21 by DW
-		params.oauth_token = localStorage.twOauthToken;
-		params.oauth_token_secret = localStorage.twOauthTokenSecret;
-		}
-	var url = urlServer + path + "?" + buildParamList (params, false);
-	$.post (url, filedata, function (data, status) {
-		if (status == "success") {
-			if (callback !== undefined) {
-				callback (undefined, data);
-				}
-			}
-		else {
-			var err = {
-				code: status.status,
-				message: JSON.parse (status.responseText).message
-				};
-			if (callback !== undefined) {
-				callback (err);
-				}
-			}
-		});
-	}
 
-function getServerInfo (callback) {
-	servercall ("api/v1/instance", undefined, undefined, callback);
-	}
-function getPublicTimeline (limit=100, callback) {
-	servercall ("api/v1/timelines/public", {limit}, undefined, callback);
-	}
-function getPublicStatusesWithTag (theTag, limit=100, callback) {
-	servercall ("api/v1/timelines/tag/" + theTag, {limit}, undefined, callback);
-	}
-function getUserStatuses (id, limit=100, callback) {
-	servercall ("api/v1/accounts/" + id + "/statuses/", {limit}, undefined, callback);
-	}
 function userLogin () {
 	const urlThisPage = trimTrailing (window.location.href, "#");
 	const urlRedirectTo = appConsts.urlMastoLandServer + "connect?redirect_url=" + urlThisPage;
@@ -204,47 +140,6 @@ function postStatus (theMessage, callback) {
 			}
 		});
 	}
-
-function testGetServerInfo () {
-	getServerInfo (function (err, theServerInfo) {
-		if (err) {
-			console.log (err.message);
-			}
-		else {
-			console.log (jsonStringify (theServerInfo));
-			}
-		})
-	}
-function testGetPublicTimeline () {
-	getPublicTimeline (undefined, function (err, theTimeline) {
-		if (err) {
-			console.log (err.message);
-			}
-		else {
-			console.log (jsonStringify (theTimeline));
-			}
-		})
-	}
-function testGetPublicStatusesWithTag () {
-	getPublicStatusesWithTag ("testing", undefined, function (err, theStatuses) {
-		if (err) {
-			console.log (err.message);
-			}
-		else {
-			console.log (jsonStringify (theStatuses));
-			}
-		})
-	}
-function testGetUserStatuses () {
-	getUserStatuses ("109348280299564804", undefined, function (err, theStatuses) {
-		if (err) {
-			console.log (err.message);
-			}
-		else {
-			console.log (jsonStringify (theStatuses));
-			}
-		})
-	}
 function testPostStatus () {
 	postStatus ("I'm a tootin fool", function (err, data) {
 		if (err) {
@@ -257,6 +152,8 @@ function testPostStatus () {
 	}
 
 function startup () {
+	console.log ("startup");
+	
 	function everySecond () {
 		const flSignedOn = mastodonMemory.access_token !== undefined;
 		if (flSignedOn) {
@@ -298,7 +195,7 @@ function startup () {
 				break;
 			}
 		}
-	console.log ("startup");
+	
 	restoreMastodonMemory ();
 	lookForOauthToken (); //if found it doesn't return
 	
