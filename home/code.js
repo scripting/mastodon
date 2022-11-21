@@ -14,7 +14,6 @@ var mastodonMemory = {
 
 function saveMastodonMemory () {
 	localStorage.mastodonMemory = jsonStringify (mastodonMemory);
-	console.log ("saveMastodonMemory: localStorage.mastodonMemory == " + jsonStringify (localStorage.mastodonMemory));
 	}
 function restoreMastodonMemory () {
 	if (localStorage.mastodonMemory !== undefined) {
@@ -111,53 +110,97 @@ function getAccessToken (codeFromMasto, callback) {
 	var urlServer = appConsts.urlMastoLandServer + "getaccesstoken?code=" + codeFromMasto;
 	httpRequest (urlServer, undefined, undefined, callback);
 	}
-function postStatus (theMessage, callback) {
-	$.ajax ({
-		url: appConsts.urlMastodonServer + "api/v1/statuses",
-		type: "POST",
-		headers: {
-			Authorization: mastodonMemory.token_type + " " + mastodonMemory.access_token
-			},
-		data: {
-			status: theMessage
-			},
-		dataType: "json"
-		})  
-	.success (function (data, status) { 
-		if (callback !== undefined) {
-			callback (undefined, data);
+
+function servercall (path, params, flAuthenticated, callback, urlServer=appConsts.urlMastoLandServer) {
+	var whenstart = new Date ();
+	if (params === undefined) {
+		params = new Object ();
+		}
+	if (flAuthenticated) { //1/11/21 by DW
+		params.access_token = mastodonMemory.access_token;
+		}
+	var url = urlServer + path + "?" + buildParamList (params);
+	httpRequest (url, undefined, undefined, function (err, jsontext) {
+		if (err) {
+			console.log ("servercall: url == " + url + ", err.message == " + err.message);
+			callback (err);
 			}
-		}) 
-	.error (function (status) { 
-		if (callback !== undefined) {
-			try {
-				var jstruct = JSON.parse (status.responseText);
-				callback ({message: jstruct.error});
-				}
-			catch (err) {
-				callback ({message: "There was an error communicating with the server."});
-				}
+		else {
+			callback (undefined, JSON.parse (jsontext));
 			}
 		});
 	}
-function verifyCredentials (callback) {
-	$.ajax ({
-		url: appConsts.urlMastodonServer + "api/v1/accounts/verify_credentials",
-		type: "GET",
-		headers: {
-			Authorization: mastodonMemory.token_type + " " + mastodonMemory.access_token
-			},
-		})  
-	.success (function (data, status) { 
-		callback (undefined, data);
-		}) 
-	.error (function (status) { 
-		try {
-			var jstruct = JSON.parse (status.responseText);
-			callback ({message: jstruct.error});
+
+function getServerInfo (callback) {
+	servercall ("api/v1/instance", undefined, undefined, callback);
+	}
+function getPublicTimeline (limit=100, callback) {
+	servercall ("api/v1/timelines/public", {limit}, undefined, callback);
+	}
+function getPublicStatusesWithTag (theTag, limit=100, callback) {
+	servercall ("api/v1/timelines/tag/" + theTag, {limit}, undefined, callback);
+	}
+function getUserStatuses (id, limit=100, callback) {
+	servercall ("api/v1/accounts/" + id + "/statuses/", {limit}, undefined, callback);
+	}
+function postNewStatus (status, inReplyTo, callback) {
+	const params = {
+		status,
+		inReplyTo
+		};
+	servercall ("toot", params, true, callback);
+	}
+function getUserInfo (callback) {
+	servercall ("getuserinfo", undefined, true, callback);
+	}
+
+function testGetServerInfo () {
+	getServerInfo (function (err, theServerInfo) {
+		if (err) {
+			console.log (err.message);
 			}
-		catch (err) {
-			callback ({message: "There was an error communicating with the server."});
+		else {
+			console.log (jsonStringify (theServerInfo));
+			}
+		})
+	}
+function testGetPublicTimeline () {
+	getPublicTimeline (undefined, function (err, theTimeline) {
+		if (err) {
+			console.log (err.message);
+			}
+		else {
+			console.log (jsonStringify (theTimeline));
+			}
+		})
+	}
+function testGetPublicStatusesWithTag () {
+	getPublicStatusesWithTag ("testing", undefined, function (err, theStatuses) {
+		if (err) {
+			console.log (err.message);
+			}
+		else {
+			console.log (jsonStringify (theStatuses));
+			}
+		})
+	}
+function testGetUserStatuses () {
+	getUserStatuses ("109348280299564804", undefined, function (err, theStatuses) {
+		if (err) {
+			console.log (err.message);
+			}
+		else {
+			console.log (jsonStringify (theStatuses));
+			}
+		})
+	}
+function testGetUserInfo () {
+	getUserInfo (function (err, theInfo) {
+		if (err) {
+			console.log (err.message);
+			}
+		else {
+			console.log (jsonStringify (theInfo));
 			}
 		});
 	}
@@ -171,49 +214,8 @@ function testPostStatus () {
 			}
 		});
 	}
-function testVerifyCredentials () {
-	verifyCredentials (function (err, data) {
-		if (err) {
-			alertDialog (err.message);
-			}
-		else {
-			console.log (data); 
-			}
-		});
-	}
-
-
-function postStatus2 (theStatus, callback) {
-	$.ajax ({
-		url: appConsts.urlMastoLandServer + "toot?status=" + theStatus + "&access_token=" + mastodonMemory.access_token,
-		type: "GET",
-		dataType: "json"
-		})  
-	.success (function (data, status) { 
-		if (callback !== undefined) {
-			callback (undefined, data);
-			}
-		}) 
-	.error (function (status) { 
-		if (callback !== undefined) {
-			try {
-				var jstruct = JSON.parse (status.responseText);
-				callback ({message: jstruct.error});
-				}
-			catch (err) {
-				callback ({message: "There was an error communicating with the server."});
-				}
-			}
-		});
-	}
-
-
-
-
 
 function startup () {
-	console.log ("startup");
-	
 	function everySecond () {
 		const flSignedOn = mastodonMemory.access_token !== undefined;
 		if (flSignedOn) {
@@ -255,35 +257,44 @@ function startup () {
 				break;
 			}
 		}
+	function startButtons () {
+		const loginbutton = $("#idMastoSignonButton");
+		loginbutton.click (function () {
+			console.log ("Click");
+			loginbutton.blur ();
+			userLogin ();
+			});
+		
+		const signoffbutton = $("#idMastoSignoffButton");
+		signoffbutton.click (function () {
+			for (var x in mastodonMemory) {
+				mastodonMemory [x] = undefined;
+				}
+			saveMastodonMemory ();
+			});
+		
+		const mastotootbutton = $("#idMastoTootButton");
+		mastotootbutton.click (function () {
+			askDialog ("What would you like to toot?", mastodonMemory.lastTootString, "Oh say can you toot.", function (tootableString, flcancel) {
+				if (!flcancel) {
+					mastodonMemory.lastTootString = tootableString;
+					saveMastodonMemory ();
+					postNewStatus (tootableString, "109382319175911764", function (err, data) {
+						if (err) {
+							alertDialog (err.message);
+							}
+						else {
+							console.log ("mastotootbutton: data == " + jsonStringify (data));
+							}
+						});
+					}
+				});
+			});
+		}
 	
+	console.log ("startup");
 	restoreMastodonMemory ();
 	lookForOauthToken (); //if found it doesn't return
-	
-	const loginbutton = $("#idMastoSignonButton");
-	loginbutton.click (function () {
-		console.log ("Click");
-		loginbutton.blur ();
-		userLogin ();
-		});
-	
-	const signoffbutton = $("#idMastoSignoffButton");
-	signoffbutton.click (function () {
-		for (var x in mastodonMemory) {
-			mastodonMemory [x] = undefined;
-			}
-		saveMastodonMemory ();
-		});
-	
-	const mastotootbutton = $("#idMastoTootButton");
-	mastotootbutton.click (function () {
-		askDialog ("What would you like to toot?", mastodonMemory.lastTootString, "Oh say can you toot.", function (tootableString, flcancel) {
-			if (!flcancel) {
-				mastodonMemory.lastTootString = tootableString;
-				saveMastodonMemory ();
-				postStatus2 (tootableString);
-				}
-			});
-		});
-	
+	startButtons ();
 	self.setInterval (everySecond, 1000);
 	}

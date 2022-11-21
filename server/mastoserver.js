@@ -58,10 +58,10 @@ function httpRequest (url, method="GET", callback) {
 			}
 		});
 	}
-function buildParamList (paramtable, flPrivate) { //8/4/21 by DW
+function buildParamList (paramtable, flPrivate=false) { //8/4/21 by DW
 	var s = "";
-	if (flPrivate) {
-		paramtable.flprivate = "true";
+	if (paramtable === undefined) { //11/21/22 by DW
+		paramtable = new Object ();
 		}
 	for (var x in paramtable) {
 		if (paramtable [x] !== undefined) { //8/4/21 by DW
@@ -114,16 +114,18 @@ function getAccessToken (codeFromMasto, callback) {
 		});
 	}
 
-function tootStatus (accessToken, statusText, callback) {
-	const theRequest = {
-		url: config.urlMastodonServer + "api/v1/statuses",
-		method: "POST",
-		headers: {
+function mastocall (path, params, accessToken, callback) {
+	var headers = undefined;
+	if (accessToken !== undefined) {
+		headers = {
 			Authorization: "Bearer " + accessToken
-			},
-		body: "status=" + statusText
+			};
+		}
+	const theRequest = {
+		url: config.urlMastodonServer + path + "?" + buildParamList (params),
+		method: "GET",
+		headers,
 		};
-	
 	request (theRequest, function (err, response, data) {
 		if (err) {
 			callback (err);
@@ -139,6 +141,43 @@ function tootStatus (accessToken, statusText, callback) {
 				}
 			}
 		});
+	}
+function mastopost (path, params, accessToken, filedata, callback) {
+	const theRequest = {
+		url: config.urlMastodonServer + path + "?" + buildParamList (params),
+		method: "POST",
+		headers: {
+			Authorization: "Bearer " + accessToken
+			},
+		body: filedata
+		};
+	request (theRequest, function (err, response, data) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			var code = response.statusCode;
+			if ((code < 200) || (code > 299)) {
+				const message = "The request returned a status code of " + response.statusCode + ".";
+				callback ({message});
+				}
+			else {
+				callback (undefined, data) 
+				}
+			}
+		});
+	}
+
+function tootStatus (accessToken, statusText, inReplyTo, callback) {
+	const params = {
+		status: statusText,
+		in_reply_to_id: inReplyTo
+		};
+	console.log ("tootStatus: statusText == " + statusText + ", inReplyTo == " + inReplyTo);
+	mastopost ("api/v1/statuses", params, accessToken, undefined, callback);
+	}
+function getUserInfo (accessToken, callback) {
+	mastocall ("api/v1/accounts/verify_credentials", undefined, accessToken, callback);
 	}
 
 function handleHttpRequest (theRequest) {
@@ -210,7 +249,14 @@ function handleHttpRequest (theRequest) {
 			return;
 		
 		case "/toot": //11/20/22 by DW
-			tootStatus (params.access_token, params.status, httpReturn);
+			console.log (utils.jsonStringify (params));
+			tootStatus (params.access_token, params.status, params.inReplyTo, httpReturn);
+			break;
+		case "/getuserinfo": 
+			getUserInfo (params.access_token, httpReturn);
+			break;
+		case "/uploadmedia": 
+			uploadMedia (params.access_token, httpReturn);
 			break;
 		
 		default: 
