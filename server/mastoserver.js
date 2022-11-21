@@ -11,7 +11,6 @@ var config = {
 	myAccessToken: undefined,
 	urlMastodonServer: undefined,
 	urlRedirect: undefined,
-	urlRedirectForUser: "http://localhost:1401/blagooey", //the page we send the user back to once they're logged in
 	
 	httpPort: process.env.PORT || 1401,
 	myDomain: "localhost",
@@ -78,22 +77,22 @@ function getUrlForAuthorize (urlRedirect) {
 	const path = "oauth/authorize";
 	const params = {
 		client_id: config.clientKey,
-		redirect_uri: config.urlRedirect,
+		redirect_uri: urlRedirect,
 		response_type: "code",
 		scope: "read+write+follow",
 		force_login: true
 		};
 	const url = config.urlMastodonServer + path + "?" + buildParamList (params, false);
-	console.log ("getUrlForAuthorize: url == " + url);
+	console.log ("\ngetUrlForAuthorize: url == " + url + "\n");
 	return (url);
 	}
 function getAccessToken (codeFromMasto, callback) {
 	const path = "oauth/token";
 	const params = {
-		grant_type: "client_credentials",
+		grant_type: "authorization_code", 
 		client_id: config.clientKey,
 		client_secret: config.clientSecret,
-		redirect_uri: config.urlRedirectForUser,
+		redirect_uri: config.urlRedirect,
 		scope: "read+write+follow",
 		code: codeFromMasto
 		};
@@ -115,6 +114,33 @@ function getAccessToken (codeFromMasto, callback) {
 		});
 	}
 
+function tootStatus (accessToken, statusText, callback) {
+	const theRequest = {
+		url: config.urlMastodonServer + "api/v1/statuses",
+		method: "POST",
+		headers: {
+			Authorization: "Bearer " + accessToken
+			},
+		body: "status=" + statusText
+		};
+	
+	request (theRequest, function (err, response, data) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			var code = response.statusCode;
+			if ((code < 200) || (code > 299)) {
+				const message = "The request returned a status code of " + response.statusCode + ".";
+				callback ({message});
+				}
+			else {
+				callback (undefined, data) 
+				}
+			}
+		});
+	}
+
 function handleHttpRequest (theRequest) {
 	var params = theRequest.params;
 	const token = params.oauth_token;
@@ -131,8 +157,14 @@ function handleHttpRequest (theRequest) {
 			}
 		theRequest.httpReturn (200, "application/json", utils.jsonStringify (jstruct));
 		}
+	function returnJsontext (jsontext) { //9/14/22 by DW
+		theRequest.httpReturn (200, "application/json", jsontext.toString ());
+		}
 	function returnError (jstruct) {
 		theRequest.httpReturn (500, "application/json", utils.jsonStringify (jstruct));
+		}
+	function returnNotFound () {
+		theRequest.httpReturn (404, "text/plain", "Not found.");
 		}
 	function returnRedirect (url, code) { 
 		var headers = {
@@ -164,6 +196,7 @@ function handleHttpRequest (theRequest) {
 			theRequest.httpReturn (200, "text/plain", new Date ());
 			return;
 		case "/connect":
+			console.log ("handleHttpRequest: params.redirect_url == " + params.redirect_url);
 			returnRedirect (getUrlForAuthorize (params.redirect_url));
 			return;
 		case "/callbackfrommastodon":
@@ -175,15 +208,15 @@ function handleHttpRequest (theRequest) {
 		case "/getaccesstoken": 
 			getAccessToken (params.code, httpReturn);
 			return;
-		case "/blagooey":
-			returnRedirect ("httblagooey");
-			return;
 		
+		case "/toot": //11/20/22 by DW
+			tootStatus (params.access_token, params.status, httpReturn);
+			break;
 		
-		
+		default: 
+			returnNotFound ();
+			break;
 		}
-	
-	theRequest.httpReturn (404, "text/plain", "Not found.");
 	}
 
 const httpConfig = {

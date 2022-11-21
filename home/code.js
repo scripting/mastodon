@@ -116,7 +116,7 @@ function postStatus (theMessage, callback) {
 		url: appConsts.urlMastodonServer + "api/v1/statuses",
 		type: "POST",
 		headers: {
-			Authorization: "Bearer " + mastodonMemory.access_token
+			Authorization: mastodonMemory.token_type + " " + mastodonMemory.access_token
 			},
 		data: {
 			status: theMessage
@@ -140,6 +140,27 @@ function postStatus (theMessage, callback) {
 			}
 		});
 	}
+function verifyCredentials (callback) {
+	$.ajax ({
+		url: appConsts.urlMastodonServer + "api/v1/accounts/verify_credentials",
+		type: "GET",
+		headers: {
+			Authorization: mastodonMemory.token_type + " " + mastodonMemory.access_token
+			},
+		})  
+	.success (function (data, status) { 
+		callback (undefined, data);
+		}) 
+	.error (function (status) { 
+		try {
+			var jstruct = JSON.parse (status.responseText);
+			callback ({message: jstruct.error});
+			}
+		catch (err) {
+			callback ({message: "There was an error communicating with the server."});
+			}
+		});
+	}
 function testPostStatus () {
 	postStatus ("I'm a tootin fool", function (err, data) {
 		if (err) {
@@ -150,6 +171,45 @@ function testPostStatus () {
 			}
 		});
 	}
+function testVerifyCredentials () {
+	verifyCredentials (function (err, data) {
+		if (err) {
+			alertDialog (err.message);
+			}
+		else {
+			console.log (data); 
+			}
+		});
+	}
+
+
+function postStatus2 (theStatus, callback) {
+	$.ajax ({
+		url: appConsts.urlMastoLandServer + "toot?status=" + theStatus + "&access_token=" + mastodonMemory.access_token,
+		type: "GET",
+		dataType: "json"
+		})  
+	.success (function (data, status) { 
+		if (callback !== undefined) {
+			callback (undefined, data);
+			}
+		}) 
+	.error (function (status) { 
+		if (callback !== undefined) {
+			try {
+				var jstruct = JSON.parse (status.responseText);
+				callback ({message: jstruct.error});
+				}
+			catch (err) {
+				callback ({message: "There was an error communicating with the server."});
+				}
+			}
+		});
+	}
+
+
+
+
 
 function startup () {
 	console.log ("startup");
@@ -216,7 +276,13 @@ function startup () {
 	
 	const mastotootbutton = $("#idMastoTootButton");
 	mastotootbutton.click (function () {
-		testPostStatus ();
+		askDialog ("What would you like to toot?", mastodonMemory.lastTootString, "Oh say can you toot.", function (tootableString, flcancel) {
+			if (!flcancel) {
+				mastodonMemory.lastTootString = tootableString;
+				saveMastodonMemory ();
+				postStatus2 (tootableString);
+				}
+			});
 		});
 	
 	self.setInterval (everySecond, 1000);
