@@ -6,11 +6,14 @@ const davehttp = require ("davehttp");
 const utils = require ("daveutils");
 
 var config = {
-	clientKey: undefined, //11/16/22 by DW
-	clientSecret: undefined,
-	myAccessToken: undefined,
-	urlMastodonServer: undefined,
-	urlRedirect: undefined,
+	servers: [
+		{
+			clientKey: undefined, 
+			clientSecret: undefined,
+			urlRedirect: undefined,
+			urlMastodonServer: undefined,
+			}
+		],
 	
 	httpPort: process.env.PORT || 1401,
 	myDomain: "localhost",
@@ -68,115 +71,166 @@ function buildParamList (paramtable, flPrivate=false) { //8/4/21 by DW
 			if (s.length > 0) {
 				s += "&";
 				}
-			s += x + "=" + paramtable [x];
+			s += x + "=" + encodeURIComponent (paramtable [x]);
 			}
 		}
 	return (s);
 	}
-function getUrlForAuthorize (urlRedirect) {
-	const path = "oauth/authorize";
-	const params = {
-		client_id: config.clientKey,
-		redirect_uri: urlRedirect,
-		response_type: "code",
-		scope: "read+write+follow",
-		force_login: true
-		};
-	const url = config.urlMastodonServer + path + "?" + buildParamList (params, false);
-	console.log ("\ngetUrlForAuthorize: url == " + url + "\n");
-	return (url);
-	}
-function getAccessToken (codeFromMasto, callback) {
-	const path = "oauth/token";
-	const params = {
-		grant_type: "authorization_code", 
-		client_id: config.clientKey,
-		client_secret: config.clientSecret,
-		redirect_uri: config.urlRedirect,
-		scope: "read+write+follow",
-		code: codeFromMasto
-		};
-	const url = config.urlMastodonServer + path + "?" + buildParamList (params, false);
-	console.log ("getAccessToken: url == " + url);
-	httpRequest (url, "POST", function (err, jsontext) {
-		if (err) {
-			callback (err);
-			}
-		else {
-			try {
-				var jstruct = JSON.parse (jsontext);
-				callback (undefined, jstruct);
-				}
-			catch (err) {
-				callback (err);
-				}
+
+function getServerInfo (clientKey, callback) {
+	var info = undefined;
+	config.servers.forEach (function (item) {
+		if (item.clientKey == clientKey) {
+			info = item;
 			}
 		});
-	}
-
-function mastocall (path, params, accessToken, callback) {
-	var headers = undefined;
-	if (accessToken !== undefined) {
-		headers = {
-			Authorization: "Bearer " + accessToken
-			};
+	if (info === undefined) {
+		const message = "Can't get info about the server because there is no server with the key.";
+		callback ({message});
 		}
-	const theRequest = {
-		url: config.urlMastodonServer + path + "?" + buildParamList (params),
-		method: "GET",
-		headers,
-		};
-	request (theRequest, function (err, response, data) {
-		if (err) {
-			callback (err);
-			}
-		else {
-			var code = response.statusCode;
-			if ((code < 200) || (code > 299)) {
-				const message = "The request returned a status code of " + response.statusCode + ".";
-				callback ({message});
-				}
-			else {
-				callback (undefined, data) 
-				}
-			}
-		});
+	else {
+		callback (undefined, info);
+		}
 	}
-function mastopost (path, params, accessToken, filedata, callback) {
-	const theRequest = {
-		url: config.urlMastodonServer + path + "?" + buildParamList (params),
-		method: "POST",
-		headers: {
-			Authorization: "Bearer " + accessToken
-			},
-		body: filedata
-		};
-	request (theRequest, function (err, response, data) {
+
+function getUrlForAuthorize (clientKey, urlRedirect, callback) {
+	const path = "oauth/authorize";
+	getServerInfo (clientKey, function (err, serverInfo) {
 		if (err) {
+			console.log ("\ngetUrlForAuthorize: err.message == " + err.message + ", clientKey == " + clientKey + "\n");
 			callback (err);
 			}
 		else {
-			var code = response.statusCode;
-			if ((code < 200) || (code > 299)) {
-				const message = "The request returned a status code of " + response.statusCode + ".";
-				callback ({message});
-				}
-			else {
-				callback (undefined, data) 
-				}
+			const params = {
+				client_id: clientKey,
+				redirect_uri: urlRedirect,
+				response_type: "code",
+				force_login: true
+				};
+			const myScope = "read+write+follow"; //11/23/22 by DW
+			const paramlist = buildParamList (params, false) + "&scope=" + myScope;
+			const url = serverInfo.urlMastodonServer + path + "?" + paramlist;
+			console.log ("\ngetUrlForAuthorize: url == " + url + "\n");
+			callback (undefined, url);
 			}
 		});
 	}
 
-function tootStatus (accessToken, statusText, inReplyTo, callback) {
+function getAccessToken (codeFromMasto, clientKey, callback) {
+	const path = "oauth/token";
+	getServerInfo (clientKey, function (err, serverInfo) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			const params = {
+				grant_type: "authorization_code", 
+				client_id: serverInfo.clientKey,
+				client_secret: serverInfo.clientSecret,
+				redirect_uri: serverInfo.urlRedirect,
+				scope: "read+write+follow",
+				code: codeFromMasto
+				};
+			const url = serverInfo.urlMastodonServer + path + "?" + buildParamList (params, false);
+			console.log ("getAccessToken: url == " + url);
+			httpRequest (url, "POST", function (err, jsontext) {
+				if (err) {
+					callback (err);
+					}
+				else {
+					try {
+						var jstruct = JSON.parse (jsontext);
+						callback (undefined, jstruct);
+						}
+					catch (err) {
+						callback (err);
+						}
+					}
+				});
+			}
+		});
+	}
+
+function mastocall (path, params, accessToken, clientKey, callback) {
+	getServerInfo (clientKey, function (err, serverInfo) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			var headers = undefined;
+			if (accessToken !== undefined) {
+				headers = {
+					Authorization: "Bearer " + accessToken
+					};
+				}
+			const theRequest = {
+				url: serverInfo.urlMastodonServer + path + "?" + buildParamList (params),
+				method: "GET",
+				headers,
+				};
+			request (theRequest, function (err, response, data) {
+				if (err) {
+					callback (err);
+					}
+				else {
+					var code = response.statusCode;
+					if ((code < 200) || (code > 299)) {
+						const message = "The request returned a status code of " + response.statusCode + ".";
+						callback ({message});
+						}
+					else {
+						callback (undefined, data) 
+						}
+					}
+				});
+			}
+		});
+	}
+function mastopost (path, params, accessToken, clientKey, filedata, callback) {
+	getServerInfo (clientKey, function (err, serverInfo) {
+		if (err) {
+			callback (err);
+			}
+		else {
+			const theRequest = {
+				url: serverInfo.urlMastodonServer + path + "?" + buildParamList (params),
+				method: "POST",
+				headers: {
+					Authorization: "Bearer " + accessToken
+					},
+				body: filedata
+				};
+			console.log ("mastopost: theRequest == " + utils.jsonStringify (theRequest));
+			request (theRequest, function (err, response, data) {
+				if (err) {
+					console.log ("mastopost: err.message == " + err.message);
+					callback (err);
+					}
+				else {
+					var code = response.statusCode;
+					console.log ("mastopost: response.statusCode == " + response.statusCode);
+					if ((code < 200) || (code > 299)) {
+						const message = "The request returned a status code of " + response.statusCode + ".";
+						callback ({message});
+						}
+					else {
+						callback (undefined, data) 
+						}
+					}
+				});
+			}
+		});
+	}
+
+function tootStatus (accessToken, clientKey, statusText, inReplyTo, callback) {
 	const params = {
 		status: statusText,
 		in_reply_to_id: inReplyTo
 		};
 	console.log ("tootStatus: statusText == " + statusText + ", inReplyTo == " + inReplyTo);
-	mastopost ("api/v1/statuses", params, accessToken, undefined, callback);
+	mastopost ("api/v1/statuses", params, accessToken, clientKey, undefined, callback);
 	}
-function getUserInfo (accessToken, callback) {
+function getUserInfo (accessToken, clientKey, callback) {
 	mastocall ("api/v1/accounts/verify_credentials", undefined, accessToken, callback);
 	}
 
@@ -236,24 +290,26 @@ function handleHttpRequest (theRequest) {
 			return;
 		case "/connect":
 			console.log ("handleHttpRequest: params.redirect_url == " + params.redirect_url);
-			returnRedirect (getUrlForAuthorize (params.redirect_url));
-			return;
-		case "/callbackfrommastodon":
-			getAccessToken (params.code, function (err, data) {
-				console.log (utils.jsonStringify (params));
-				returnPlainText (utils.jsonStringify (params));
+			getUrlForAuthorize (params.client_key, params.redirect_url, function (err, url) {
+				if (err) {
+					returnError (err);
+					}
+				else {
+					returnRedirect (url);
+					}
 				});
 			return;
 		case "/getaccesstoken": 
-			getAccessToken (params.code, httpReturn);
+			console.log ("\n/getaccesstoken: params.code == " + params.code + ", params.client_key == " + params.client_key);
+			getAccessToken (params.code, params.client_key, httpReturn);
 			return;
 		
 		case "/toot": //11/20/22 by DW
 			console.log (utils.jsonStringify (params));
-			tootStatus (params.access_token, params.status, params.inReplyTo, httpReturn);
+			tootStatus (params.access_token, params.client_key, params.status, params.inReplyTo, httpReturn);
 			break;
 		case "/getuserinfo": 
-			getUserInfo (params.access_token, httpReturn);
+			getUserInfo (params.access_token, params.client_key, httpReturn);
 			break;
 		case "/uploadmedia": 
 			uploadMedia (params.access_token, httpReturn);
