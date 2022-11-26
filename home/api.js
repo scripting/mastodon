@@ -1,18 +1,18 @@
+const myServerUrl = "http://localhost:1401/"; 
+
+const myClientKey = "2l26ogBP5utGp-VAf0J66r23KDn5aCRTjC0m9MoHdfQ"; //radio3 on 
+
+
 var mastodonMemory = {
-	clientKey: "czV8bisLmBQAS4XhXubYnaRMf_36tODiO5YE80C3x0M", //social.scottfr.ee
+	urlMastoLandServer: myServerUrl, 
 	
-	
-	
-	
-	urlMastoLandServer: "http://dave.masto.land/", 
-	
-	
-	
+	clientKey: myClientKey, 
 	
 	access_token: undefined,
 	created_at: undefined,
 	scope: undefined,
 	token_type: undefined,
+	
 	lastTootString: ""
 	}
 function saveMastodonMemory () {
@@ -33,6 +33,16 @@ function restoreMastodonMemory () {
 		}
 	console.log ("restoreMastodonMemory: mastodonMemory == " + jsonStringify (mastodonMemory));
 	}
+
+function initMastodonMemory () {
+	for (var x in mastodonMemory) {
+		mastodonMemory [x] = undefined;
+		}
+	mastodonMemory.urlMastoLandServer = myServerUrl;
+	mastodonMemory.clientKey = myClientKey;
+	}
+
+
 
 function getAllUrlParams () { //9/7/22 by DW
 	var s = location.search;
@@ -63,6 +73,7 @@ function httpRequest (url, timeout, headers, callback) {
 	timeout = (timeout === undefined) ? 30000 : timeout;
 	var jxhr = $.ajax ({ 
 		url: url,
+		method: "GET",
 		dataType: "text", 
 		headers,
 		timeout

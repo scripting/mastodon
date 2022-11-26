@@ -14,6 +14,17 @@ var config = {
 			urlMastodonServer: undefined,
 			}
 		],
+	apps: [
+		{
+			client_name: "Radio 3",
+			redirect_uris: "http://radio3.io/",
+			scopes: "write",
+			website: "http://radio3.io/"
+			}
+		],
+	
+	
+	
 	
 	httpPort: process.env.PORT || 1401,
 	myDomain: "localhost",
@@ -107,7 +118,7 @@ function getUrlForAuthorize (clientKey, urlRedirect, callback) {
 				response_type: "code",
 				force_login: true
 				};
-			const myScope = "read+write+follow"; //11/23/22 by DW
+			const myScope = "write"; //11/23/22 by DW
 			const paramlist = buildParamList (params, false) + "&scope=" + myScope;
 			const url = serverInfo.urlMastodonServer + path + "?" + paramlist;
 			console.log ("\ngetUrlForAuthorize: url == " + url + "\n");
@@ -128,7 +139,7 @@ function getAccessToken (codeFromMasto, clientKey, callback) {
 				client_id: serverInfo.clientKey,
 				client_secret: serverInfo.clientSecret,
 				redirect_uri: serverInfo.urlRedirect,
-				scope: "read+write+follow",
+				scope: "write",
 				code: codeFromMasto
 				};
 			const url = serverInfo.urlMastodonServer + path + "?" + buildParamList (params, false);
@@ -169,14 +180,32 @@ function mastocall (path, params, accessToken, clientKey, callback) {
 				headers,
 				};
 			request (theRequest, function (err, response, data) {
+				function sendBackError (defaultMessage) {
+					var flcalledback = false;
+					if (data !== undefined) {
+						try {
+							jstruct = JSON.parse (data);
+							if (jstruct.error !== undefined) {
+								callback ({message: jstruct.error});
+								flcalledback = true;
+								}
+							}
+						catch (err) {
+							}
+						}
+						
+					if (!flcalledback) {
+						callback ({message: defaultMessage});
+						}
+					}
 				if (err) {
-					callback (err);
+					sendBackError (err.message);
 					}
 				else {
 					var code = response.statusCode;
 					if ((code < 200) || (code > 299)) {
 						const message = "The request returned a status code of " + response.statusCode + ".";
-						callback ({message});
+						sendBackError (message);
 						}
 					else {
 						callback (undefined, data) 
@@ -231,7 +260,47 @@ function tootStatus (accessToken, clientKey, statusText, inReplyTo, callback) {
 	mastopost ("api/v1/statuses", params, accessToken, clientKey, undefined, callback);
 	}
 function getUserInfo (accessToken, clientKey, callback) {
-	mastocall ("api/v1/accounts/verify_credentials", undefined, accessToken, callback);
+	mastocall ("api/v1/accounts/verify_credentials", undefined, accessToken, clientKey, callback);
+	}
+
+
+function addUserAgent (headers) {
+	headers ["User-Agent"] = myProductName + " v" + myVersion;
+	}
+
+function createAppOnServer (urlServer, callback) { //11/25/22 by DW
+	const app = config.apps [0];
+	var params = app;
+	delete params.scopes; //can't pass the scopes through buildParamList because it will encode the + signs
+	const paramlist = buildParamList (params) + "&scopes=" + app.scopes; 
+	
+	var headers = new (Object);
+	addUserAgent (headers);
+	
+	const theRequest = {
+		url: urlServer + "api/v1/apps" + "?" + paramlist,
+		method: "POST",
+		headers,
+		body: undefined
+		};
+	console.log ("createAppOnServer: theRequest == " + utils.jsonStringify (theRequest));
+	request (theRequest, function (err, response, data) {
+		if (err) {
+			console.log ("createAppOnServer: err.message == " + err.message);
+			callback (err);
+			}
+		else {
+			var code = response.statusCode;
+			console.log ("createAppOnServer: response.statusCode == " + response.statusCode);
+			if ((code < 200) || (code > 299)) {
+				const message = "The request returned a status code of " + response.statusCode + ".";
+				callback ({message});
+				}
+			else {
+				callback (undefined, data) 
+				}
+			}
+		});
 	}
 
 function handleHttpRequest (theRequest) {
@@ -284,41 +353,52 @@ function handleHttpRequest (theRequest) {
 		}
 	
 	
-	switch (theRequest.lowerpath) {
-		case "/now": 
-			theRequest.httpReturn (200, "text/plain", new Date ());
-			return;
-		case "/connect":
-			console.log ("handleHttpRequest: params.redirect_url == " + params.redirect_url);
-			getUrlForAuthorize (params.client_key, params.redirect_url, function (err, url) {
-				if (err) {
-					returnError (err);
-					}
-				else {
-					returnRedirect (url);
-					}
-				});
-			return;
-		case "/getaccesstoken": 
-			console.log ("\n/getaccesstoken: params.code == " + params.code + ", params.client_key == " + params.client_key);
-			getAccessToken (params.code, params.client_key, httpReturn);
-			return;
-		
-		case "/toot": //11/20/22 by DW
-			console.log (utils.jsonStringify (params));
-			tootStatus (params.access_token, params.client_key, params.status, params.inReplyTo, httpReturn);
-			break;
-		case "/getuserinfo": 
-			getUserInfo (params.access_token, params.client_key, httpReturn);
-			break;
-		case "/uploadmedia": 
-			uploadMedia (params.access_token, httpReturn);
-			break;
-		
-		default: 
-			returnNotFound ();
+	
+	switch (theRequest.method) {
+		case "POST":
+			switch (theRequest.lowerpath) {
+				default: 
+					returnNotFound ();
+					break;
+				}
+		case "GET":
+			switch (theRequest.lowerpath) {
+				case "/now": 
+					theRequest.httpReturn (200, "text/plain", new Date ());
+					return;
+				case "/connect":
+					console.log ("handleHttpRequest: params.redirect_url == " + params.redirect_url);
+					getUrlForAuthorize (params.client_key, params.redirect_url, function (err, url) {
+						if (err) {
+							returnError (err);
+							}
+						else {
+							returnRedirect (url);
+							}
+						});
+					return;
+				case "/getaccesstoken": 
+					console.log ("\n/getaccesstoken: params.code == " + params.code + ", params.client_key == " + params.client_key);
+					getAccessToken (params.code, params.client_key, httpReturn);
+					return;
+				
+				case "/toot": //11/20/22 by DW
+					console.log (utils.jsonStringify (params));
+					tootStatus (params.access_token, params.client_key, params.status, params.inReplyTo, httpReturn);
+					break;
+				case "/getuserinfo": 
+					getUserInfo (params.access_token, params.client_key, httpReturn);
+					break;
+				default: 
+					returnNotFound ();
+					break;
+				}
 			break;
 		}
+	
+	
+	
+	
 	}
 
 const httpConfig = {

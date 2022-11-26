@@ -14,6 +14,7 @@ function startButtons () {
 		for (var x in mastodonMemory) {
 			mastodonMemory [x] = undefined;
 			}
+		initMastodonMemory ();
 		saveMastodonMemory ();
 		});
 	
@@ -23,7 +24,7 @@ function startButtons () {
 			if (!flcancel) {
 				mastodonMemory.lastTootString = tootableString;
 				saveMastodonMemory ();
-				postNewStatus (tootableString, "109395259673331210", function (err, data) {
+				postNewStatus (tootableString, undefined, function (err, data) {
 					if (err) {
 						alertDialog (err.message);
 						}
@@ -31,6 +32,18 @@ function startButtons () {
 						console.log ("mastotootbutton: data == " + jsonStringify (data));
 						}
 					});
+				}
+			});
+		});
+	
+	const userinfobutton = $("#idUserinfoButton");
+	userinfobutton.click (function () {
+		getUserInfo (function (err, theInfo) {
+			if (err) {
+				alertDialog (err.message);
+				}
+			else {
+				console.log (jsonStringify (theInfo));
 				}
 			});
 		});
