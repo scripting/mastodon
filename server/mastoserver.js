@@ -14,14 +14,6 @@ var config = {
 			urlMastodonServer: undefined,
 			}
 		],
-	apps: [
-		{
-			client_name: "Radio 3",
-			redirect_uris: "http://radio3.io/",
-			scopes: "write",
-			website: "http://radio3.io/"
-			}
-		],
 	
 	
 	
@@ -118,8 +110,7 @@ function getUrlForAuthorize (clientKey, urlRedirect, callback) {
 				response_type: "code",
 				force_login: true
 				};
-			const myScope = "write"; //11/23/22 by DW
-			const paramlist = buildParamList (params, false) + "&scope=" + myScope;
+			const paramlist = buildParamList (params, false) + "&scope=" + serverInfo.scope;
 			const url = serverInfo.urlMastodonServer + path + "?" + paramlist;
 			console.log ("\ngetUrlForAuthorize: url == " + url + "\n");
 			callback (undefined, url);
@@ -139,10 +130,9 @@ function getAccessToken (codeFromMasto, clientKey, callback) {
 				client_id: serverInfo.clientKey,
 				client_secret: serverInfo.clientSecret,
 				redirect_uri: serverInfo.urlRedirect,
-				scope: "write",
 				code: codeFromMasto
 				};
-			const url = serverInfo.urlMastodonServer + path + "?" + buildParamList (params, false);
+			const url = serverInfo.urlMastodonServer + path + "?" + buildParamList (params, false) + "&scope=" + serverInfo.scope;
 			console.log ("getAccessToken: url == " + url);
 			httpRequest (url, "POST", function (err, jsontext) {
 				if (err) {
@@ -268,40 +258,6 @@ function addUserAgent (headers) {
 	headers ["User-Agent"] = myProductName + " v" + myVersion;
 	}
 
-function createAppOnServer (urlServer, callback) { //11/25/22 by DW
-	const app = config.apps [0];
-	var params = app;
-	delete params.scopes; //can't pass the scopes through buildParamList because it will encode the + signs
-	const paramlist = buildParamList (params) + "&scopes=" + app.scopes; 
-	
-	var headers = new (Object);
-	addUserAgent (headers);
-	
-	const theRequest = {
-		url: urlServer + "api/v1/apps" + "?" + paramlist,
-		method: "POST",
-		headers,
-		body: undefined
-		};
-	console.log ("createAppOnServer: theRequest == " + utils.jsonStringify (theRequest));
-	request (theRequest, function (err, response, data) {
-		if (err) {
-			console.log ("createAppOnServer: err.message == " + err.message);
-			callback (err);
-			}
-		else {
-			var code = response.statusCode;
-			console.log ("createAppOnServer: response.statusCode == " + response.statusCode);
-			if ((code < 200) || (code > 299)) {
-				const message = "The request returned a status code of " + response.statusCode + ".";
-				callback ({message});
-				}
-			else {
-				callback (undefined, data) 
-				}
-			}
-		});
-	}
 
 function handleHttpRequest (theRequest) {
 	var params = theRequest.params;
